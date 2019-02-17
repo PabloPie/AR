@@ -1,0 +1,44 @@
+Question 1 :
+	Le philosophe demande une baguette à chaque voisin qui répond 
+	s'il peut la prendre. Si deux voisins font leur demande en même 
+	temps alors il faut définir qui prend la baguette commune sinon on 
+	va avoir une famine.
+	Il faut au moins une variable locale pour chaque baguette, afin de 
+	savoir si on les possède.
+Question 2 :
+	Si tous les philosophes font leur demande en même temps alors il y a 
+	un interblocage.
+Question 3 :
+  Un processus philosophe doit se terminer lorsqu'il a fini de manger et 
+  lorsque ses deux voisins ont également terminés (car il doit encore 
+  répondre à leurs demandes même lorsque lui a terminé).
+Question 4 :
+	Tant qu'on a pas fini nos repas :
+		Si on a terminé de penser:
+			on passe dans l'état HUNGRY et on demande les deux baguettes
+		On attend un message
+		Si on reçoit un message DONE_EATING
+			alors un voisin a terminé de manger, on met à jour son état
+			local pour DONE.
+
+		Si on reçoit un message WANNA_CHOPSTICK
+			alors un voisin veut la baguette commune.
+			Si on est dans l'état HUNGRY
+				Si le demandeur est prioritaire
+					alors on lui donne la baguette (message 
+					CHOPSTICK_YOURS) et on lui fait une demande (message
+					WANNA_CHOPSTICK) pour quand il aura terminé.
+				Sinon (on est prioritaire)
+					alors on ne fait rien pour attendre sa réponse à 
+					notre demande (qui sera positive vu qu'on est 
+					prioritaire).
+			Sinon (on est dans l'état THINKING)
+				alors on lui donne la baguette(message CHOPSTICK_YOURS).
+
+		Si on reçoit un message CHOPSTICK_YOURS
+			alors on a reçu une baguette
+			Si on a nos deux baguettes
+				alors on mange pendant un temps fini, on incrémente le 
+				compteur de repas consommés, on rend les baguettes et on
+				passe dans l'état THINKING.
+	Fin tant que
