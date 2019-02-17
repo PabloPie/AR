@@ -1,7 +1,7 @@
 #include "mpi_server.h"
 static server the_server;
 
-void *listen(void *arg)
+void *mylisten(void *arg)
 {
 	int flag = 0;
 	MPI_Status status;
@@ -20,7 +20,7 @@ void *listen(void *arg)
 void start_server(void (*callback)(int, int))
 {
 	pthread_mutex_init(getMutex(), NULL);
-	pthread_create(&the_server.listener, NULL, listen, NULL);
+	pthread_create(&the_server.listener, NULL, mylisten, NULL);
 	pthread_cond_init(getCond(), NULL);
 	the_server.callback = callback;
 }
