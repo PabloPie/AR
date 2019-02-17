@@ -25,7 +25,7 @@ void msg_callback(int _tag, int _source)
 	pthread_mutex_unlock(getMutex());
 
 	pthread_mutex_lock(getMutex());
-	MPI_Send(message, strlen(message)+1, MPI_CHAR, dest, MPI_ANY_TAG, MPI_COMM_WORLD);
+	MPI_Send(message, strlen(message)+1, MPI_CHAR, dest, 0, MPI_COMM_WORLD);
 	pthread_mutex_unlock(getMutex());
 	printf("%s\n", message_rcv);
 }
@@ -46,7 +46,7 @@ int main(int argc, char ** argv)
     start_server(msg_callback);
 
     pthread_cond_wait(getCond(),getMutex());
-	printf("Received signal, %d closing.", my_rank);
+	printf("Received signal, %d closing.\n", my_rank);
     destroy_server();
 	MPI_Finalize();
 }
