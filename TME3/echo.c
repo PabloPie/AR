@@ -1,10 +1,12 @@
 #include <mpi.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 
 #define TAGINIT 0
 #define TAGCALC 1
 #define TAGRESP 2
+#define TAGEND 3
 #define NB_SITE 6
 #define INITIATOR 0
 #define ECHO_INIT 1
@@ -13,6 +15,8 @@ int nb_voisins, local_value, val_recv;
 int* voisins;
 int predecessor, rang;
 int initiated = 0;
+int* next;
+int resps = 0;
 
 void simulateur(void) {
 	int i;
@@ -39,6 +43,7 @@ void initialize_values()
 	MPI_Status status;
 	MPI_Recv(&nb_voisins, 1, MPI_INT, INITIATOR, TAGINIT, MPI_COMM_WORLD, &status);
 	voisins = (int *)malloc(sizeof(int)*nb_voisins);
+	next = (int *)malloc(sizeof(int)*nb_voisins);
 	MPI_Recv(voisins, nb_voisins, MPI_INT, INITIATOR, TAGINIT, MPI_COMM_WORLD, &status);
 	MPI_Recv(&local_value, 1, MPI_INT, INITIATOR, TAGINIT, MPI_COMM_WORLD, &status);
 }
@@ -53,7 +58,6 @@ void show_initial(int rang)
 		printf("Voisin %d: %d\n", i, voisins[i]);
 	printf("Initial local value: %d\n\n", local_value);
 }
-
 
 static inline void set_min()
 {
@@ -75,33 +79,51 @@ void receive_msg()
 	int nb_responses = 0;
 	while (nb_responses < nb_voisins - 1){
 		MPI_Recv(&val_recv, 1, MPI_INT, MPI_ANY_SOURCE, MPI_ANY_TAG, MPI_COMM_WORLD, &status);
-		if (!initiated) {
+		if (TAGCALC && !initiated) {
 			initiated = 1;
 			predecessor = status.MPI_SOURCE;
 			printf("%d received request for calc from %d\n", rang, predecessor);
 			set_min();
 			send_msg();
-		} else {
+		} else if(initiated && status.MPI_TAG == TAGRESP) {
+			next[resps] = status.MPI_SOURCE;
+			resps++;
+			nb_responses++;
+			set_min();
+		} else if (initiated && status.MPI_TAG == TAGCALC) {
 			nb_responses++;
 			set_min();
 		}
 	}
 	if (rang != ECHO_INIT) {
+		int i;
 		printf("All received, sending resp to %d, from %d\n", predecessor, rang);
+		for (i = 0; i < resps; i++)
+			printf("%d :fils %d: %d\n", rang, i, next[i]);
 		MPI_Send(&local_value, 1, MPI_INT, predecessor, TAGRESP, MPI_COMM_WORLD);
+		MPI_Recv(&local_value, 1, MPI_INT, predecessor, TAGEND, MPI_COMM_WORLD, &status);
+		for (i = 0; i < resps; i++)
+			MPI_Send(&local_value, 1, MPI_INT, next[i], TAGEND, MPI_COMM_WORLD);
+		printf("%d : min value is %d\n", rang, local_value);
 	}
 }
 
 void calcul_min(int rang)
 {
+	int i;
 	predecessor = rang;
 	if (rang == ECHO_INIT){
 		initiated = 1;
 		send_msg();
 		receive_msg();
-		printf("%d is the min value\n", local_value);
+		printf("%d is the min value, sending back...\n", local_value);
+		for (i = 0; i < nb_voisins; i++) {
+			printf("%d :fils %d: %d\n", rang, i, voisins[i]);
+			MPI_Send(&local_value, 1, MPI_INT, voisins[i], TAGEND, MPI_COMM_WORLD);
+		}
 	} else {
 		receive_msg();
+		printf("%d ended\n", rang);
 	}
 }
 /******************************************************************************/
