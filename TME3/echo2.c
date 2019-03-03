@@ -24,7 +24,7 @@ void simulateur(void) {
 
 	/* nb_voisins[i] est le nombre de voisins du site i */
 	int nb_voisins[NB_SITE+1] = {-1, 3, 3, 2, 3, 5, 2};
-	int min_local[NB_SITE+1] = {-1, 9, 11, 8, 14, 5, 17};
+	int min_local[NB_SITE+1] = {-1, 9, 11, 8, 1, 5, 17};
 
    /* liste des voisins */
 	int voisins[NB_SITE+1][5] = {{-1, -1, -1, -1, -1},
@@ -89,16 +89,13 @@ void receive_msg()
 		N = 0;
 		set_min();
 		send_msg();
-	} else {
+	} else if (status.MPI_TAG == TAGRESP) {
 		next[next_i++] = status.MPI_SOURCE;
 	}
 	set_min();
 	N++;
-	if (N == nb_voisins) {
-		initiated = 0;
-		if (rang != ECHO_INIT)
-			MPI_Send(&local_value, 1, MPI_INT, predecessor, TAGRESP, MPI_COMM_WORLD);
-	}
+	if (N == nb_voisins && rang != ECHO_INIT) 
+		MPI_Send(&local_value, 1, MPI_INT, predecessor, TAGRESP, MPI_COMM_WORLD);
 }
 
 void calcul_min(int rang)
@@ -116,10 +113,8 @@ void calcul_min(int rang)
 	} else {
 		while (N != nb_voisins) receive_msg();
 		MPI_Recv(&local_value, 1, MPI_INT, predecessor, TAGEND, MPI_COMM_WORLD, &status);
-		printf("%d: Sending min value over...\n", rang);
 		while(*(++iter) != -1) MPI_Send(&local_value, 1, MPI_INT, *iter, TAGEND, MPI_COMM_WORLD);
-		printf("%d: min value is %d", rang, local_value);
-		printf("%d ended\n", rang);
+		printf("%d: min value is %d\n", rang, local_value);
 	}
 }
 /******************************************************************************/
