@@ -89,16 +89,13 @@ void receive_msg()
 		N = 0;
 		set_min();
 		send_msg();
-	} else {
+	} else if (status.MPI_TAG == TAGRESP) {
 		next[next_i++] = status.MPI_SOURCE;
 	}
 	set_min();
 	N++;
-	if (N == nb_voisins) {
-		initiated = 0;
-		if (rang != ECHO_INIT)
-			MPI_Send(&local_value, 1, MPI_INT, predecessor, TAGRESP, MPI_COMM_WORLD);
-	}
+	if (N == nb_voisins && rang != ECHO_INIT) 
+		MPI_Send(&local_value, 1, MPI_INT, predecessor, TAGRESP, MPI_COMM_WORLD);
 }
 
 void calcul_min(int rang)
