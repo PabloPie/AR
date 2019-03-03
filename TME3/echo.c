@@ -75,10 +75,10 @@ void receive_msg()
 	int nb_responses = 0;
 	while (nb_responses < nb_voisins - 1){
 		MPI_Recv(&val_recv, 1, MPI_INT, MPI_ANY_SOURCE, MPI_ANY_TAG, MPI_COMM_WORLD, &status);
-		if (status.MPI_TAG == TAGCALC && !initiated) {
+		if (!initiated) {
 			initiated = 1;
 			predecessor = status.MPI_SOURCE;
-			printf("Received request for calc from %d\n", predecessor);
+			printf("%d received request for calc from %d\n", rang, predecessor);
 			set_min();
 			send_msg();
 		} else {
@@ -96,6 +96,7 @@ void calcul_min(int rang)
 {
 	predecessor = rang;
 	if (rang == ECHO_INIT){
+		initiated = 1;
 		send_msg();
 		receive_msg();
 		printf("%d is the min value\n", local_value);
