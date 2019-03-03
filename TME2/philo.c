@@ -21,9 +21,9 @@ int rank;             // mon identifiant
 int left, right;      // les identifiants de mes voisins gauche et droit
 
 //************   LA TEMPORISATION
-int local_clock = 0;                    // horloge locale
-int clock_val;                          // valeur d'horloge recue
-int meal_times[NB_MEALS];        // dates de mes repas
+static int local_clock = 0;                    // horloge locale
+static int clock_val;                          // valeur d'horloge recue
+static int meal_times[NB_MEALS];        // dates de mes repas
 
 //************   LES ETATS LOCAUX
 int local_state = THINKING;		// moi
@@ -45,6 +45,7 @@ int max(int a, int b) {
 
 void receive_message(MPI_Status *status) {
 	MPI_Recv(&clock_val, sizeof(int), MPI_INT, MPI_ANY_SOURCE, MPI_ANY_TAG, MPI_COMM_WORLD, status);
+	local_clock = max(local_clock + 1, clock_val + 1);
 }
 
 void send_message(int dest, int tag) {
@@ -53,19 +54,12 @@ void send_message(int dest, int tag) {
 
 /* renvoie 0 si le noeud local et ses 2 voisins sont termines */
 int check_termination() {
-	if(local_state!=DONE && meals_eaten >= NB_MEALS)
-	{
-		send_message(left, DONE_EATING);
-		send_message(right, DONE_EATING);
-		local_state = DONE;
-	}
 	return local_state!=DONE || left_state!=DONE || right_state!=DONE;
 }
 
 //************   LE PROGRAMME   *************************** 
 int main(int argc, char* argv[]) {
-
-   MPI_Status status;
+	MPI_Status status;
 
    MPI_Init(&argc, &argv);
    MPI_Comm_size(MPI_COMM_WORLD, &NB);
@@ -86,24 +80,29 @@ int main(int argc, char* argv[]) {
 			send_message(right, WANNA_CHOPSTICK);
 
 		}
-		printf("%d atttend message...\n",rank);
+		printf("P%d [time=%d]> atttend message...\n",rank, local_clock);
 		receive_message(&status);
 
 		if (status.MPI_TAG == DONE_EATING)
 		{
-			printf("%d reçoit DONE EATING de %d\n", rank, status.MPI_SOURCE);
+			printf("P%d [time=%d]> %d a terminé de manger\n", rank, local_clock, status.MPI_SOURCE);
 			if(status.MPI_SOURCE == left) left_state = DONE;
 			else if(status.MPI_SOURCE == right) right_state = DONE;
 		}
 		else if (status.MPI_TAG == WANNA_CHOPSTICK)
 		{
-			printf("%d reçoit WANNA_CHOPSTICK de %d\n", rank, status.MPI_SOURCE);
+			printf("P%d [time=%d]> reçoit une demande de baguette de %d\n", rank, local_clock, status.MPI_SOURCE);
+			
+			if(status.MPI_SOURCE == left) left_state = HUNGRY;
+			else right_state = HUNGRY;
 			
 			if(local_state == HUNGRY)
 			{
-				printf("%d et %d veulent la même baguette\n", rank, status.MPI_SOURCE);
+				printf("P%d [time=%d]> et %d veulent la même baguette\n", rank, local_clock, status.MPI_SOURCE);
 				if(rank > status.MPI_SOURCE) // Je ne suis pas prio donc je donne et je redemande
 				{
+					if(status.MPI_SOURCE == left) left_chopstick = 0;
+					else right_chopstick = 0;
 					send_message(status.MPI_SOURCE, CHOPSTICK_YOURS);
 					send_message(status.MPI_SOURCE, WANNA_CHOPSTICK);
 				}
@@ -112,21 +111,44 @@ int main(int argc, char* argv[]) {
 		}
 		else if (status.MPI_TAG == CHOPSTICK_YOURS)
 		{
-			printf("%d reçoit CHOPSTICK_YOURS de %d\n", rank, status.MPI_SOURCE);
+			printf("P%d [time=%d]> reçoit une baguette de %d\n", rank, local_clock, status.MPI_SOURCE);
 			
 			if(status.MPI_SOURCE == left) left_chopstick = 1;
 			else if(status.MPI_SOURCE == right) right_chopstick = 1;
 			
-			if(left_chopstick && right_chopstick)
+			if(left_chopstick && right_chopstick && local_state == HUNGRY)
 			{
-				local_state = THINKING;
-				printf("\t\t\t%d a deux baguettes et mange pour la %d fois\n",rank, meals_eaten);
+				printf("P%d [time=%d]> mange pour la %d fois\n",rank, local_clock, meals_eaten);
 				left_chopstick=0;
 				right_chopstick=0;
+				meal_times[meals_eaten] = local_clock;
+
 				meals_eaten++;
+
+				if(meals_eaten >= NB_MEALS)
+				{
+					local_state = DONE;
+					printf("P%d [time=%d]> a mangé tous ses repas.\n",rank, local_clock);
+					send_message(left, DONE_EATING);
+					send_message(right, DONE_EATING);
+				}
+				else local_state = THINKING;
+
+				if(left_state == HUNGRY) send_message(left, CHOPSTICK_YOURS);
+				if(right_state == HUNGRY) send_message(right, CHOPSTICK_YOURS);
+				
 			}
 		}
+		
+		local_clock++;
 	}
+	
+	int r=0;
+	char buf[75];
+	sprintf(buf, "P%d date des repas : ",rank);
+	for(;r<NB_MEALS;r++) sprintf(buf, "%s, %d", buf, meal_times[r]);
+	printf("%s\n",buf);
+
 	
    MPI_Finalize();
    return 0;
