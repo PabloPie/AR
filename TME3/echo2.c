@@ -7,6 +7,7 @@
 #define TAGCALC 1
 #define TAGRESP 2
 #define TAGEND 3
+#define TAGIGN 4
 #define NB_SITE 6
 #define INITIATOR 0
 #define ECHO_INIT 1
@@ -90,10 +91,14 @@ void receive_msg()
 		set_min();
 		send_msg();
 	} else if (status.MPI_TAG == TAGRESP) {
+		printf("%d: %d responded\n", rang, status.MPI_SOURCE);
 		next[next_i++] = status.MPI_SOURCE;
+	} else {
+		MPI_Send(&local_value, 1, MPI_INT, status.MPI_SOURCE, TAGIGN, MPI_COMM_WORLD);
 	}
 	set_min();
-	N++;
+	if (status.MPI_TAG != TAGCALC)
+		N++;
 	if (N == nb_voisins && rang != ECHO_INIT) 
 		MPI_Send(&local_value, 1, MPI_INT, predecessor, TAGRESP, MPI_COMM_WORLD);
 }
@@ -111,9 +116,12 @@ void calcul_min(int rang)
 		printf("%d is the min value, sending back...\n", local_value);
 		for(; i < nb_voisins; i++) MPI_Send(&local_value, 1, MPI_INT, voisins[i], TAGEND, MPI_COMM_WORLD);
 	} else {
-		while (N != nb_voisins) receive_msg();
+		while (N != nb_voisins-1) receive_msg();
+		printf("%d <- %d\n", predecessor, rang);
+		while(*(++iter) != -1) printf("%d -> %d\n", rang, *iter);
+
 		MPI_Recv(&local_value, 1, MPI_INT, predecessor, TAGEND, MPI_COMM_WORLD, &status);
-		while(*(++iter) != -1) MPI_Send(&local_value, 1, MPI_INT, *iter, TAGEND, MPI_COMM_WORLD);
+		// while(*(++iter) != -1) MPI_Send(&local_value, 1, MPI_INT, *iter, TAGEND, MPI_COMM_WORLD);
 		printf("%d: min value is %d\n", rang, local_value);
 	}
 }
