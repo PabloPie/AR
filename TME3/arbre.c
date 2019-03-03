@@ -8,9 +8,9 @@
 #define NB_SITE 6
 #define INITIATOR 0
 
-int nb_voisins, local_value, val_recv;
-int* voisins;
-int voisins_recu[NB_SITE + 1];
+static int nb_voisins, local_value, val_recv, rang;
+static int* voisins;
+static int voisins_recu[NB_SITE + 1];
 
 void simulateur(void) {
    int i;
@@ -32,6 +32,7 @@ void simulateur(void) {
    }
 }
 
+// Initialise les valeurs locales envoyées par le processus 0
 void initialize_values()
 {  
    MPI_Status status;
@@ -41,62 +42,72 @@ void initialize_values()
    MPI_Recv(&local_value, 1, MPI_INT, INITIATOR, TAGINIT, MPI_COMM_WORLD, &status);
 }
 
-void show_initial(int rang)
+// Garde la meilleure valeur entre valeur reçue et valeur locale
+void update_value()
 {
-	int i = 0;
-
-	printf("Processus de rang %d\n========\n",rang);
-	printf("Nb voisins: %d\n", nb_voisins);
-	for (; i < nb_voisins; i++)
-		printf("Voisin %d: %d\n", i, voisins[i]);
-	printf("Initial local value: %d\n\n", local_value);
+	// plus petite valeur
+	if(val_recv < local_value) local_value = val_recv;
+	// plus grande valeur
+	//if(val_recv > local_value) local_value = val_recv;
 }
 
-void calcul_min(int rang)
+void calcul_min()
 {
-	int nb_msg_recv = 0;
-	int parent, i = 0;
-
+	int parent, i, nb_msg_recv = 0;
 	MPI_Status status;
+
+	// On attend un message de tous nos voisins sauf un
 	while (nb_msg_recv < nb_voisins - 1){
 		MPI_Recv(&val_recv, 1, MPI_INT, MPI_ANY_SOURCE, TAGCALC, MPI_COMM_WORLD, &status);
+		update_value(); // on met à jour notre valeur locale
 		voisins_recu[status.MPI_SOURCE] = 1;
-		if (val_recv < local_value) {
-			local_value = val_recv;
-		}
 		nb_msg_recv++;
 	}
 
-	for (i = 0; i < nb_voisins; i++ ) {
-		if (voisins_recu[voisins[i]] == 0) {
+	// Qui est notre parent ? (aka celui qui n'a pas envoyé de message)
+	for (i = 0; i < nb_voisins; i++ ){
+		if (voisins_recu[voisins[i]] == 0)
 			parent = voisins[i];
+	}
+	
+	// On envoit notre valeur locale à notre parent
+	MPI_Send(&local_value, 1, MPI_INT, parent, TAGCALC, MPI_COMM_WORLD);
+
+	// On attend un message et on met à jour notre valeur locale
+	MPI_Recv(&val_recv, 1, MPI_INT, MPI_ANY_SOURCE, MPI_ANY_TAG, MPI_COMM_WORLD, &status);
+	update_value();
+
+	// Si c'est un TAGCALC alors on a reçu un message de tous les voisins
+	// donc on est un décideur
+	if(status.MPI_TAG == TAGCALC){
+		printf("Process %d is a leader.\n",rang);
+		for (i = 0; i < nb_voisins; i++ ) {
+			MPI_Send(&local_value, 1, MPI_INT, voisins[i], TAGDECI, MPI_COMM_WORLD);
 		}
 	}
-	printf("Process %d sending min value %d to its parent %d", rang, local_value, parent);
-	MPI_Send(&local_value, 1, MPI_INT, parent, TAGCALC, MPI_COMM_WORLD);
-	MPI_Recv(&val_recv, 1, MPI_INT, MPI_ANY_SOURCE, MPI_ANY_TAG, MPI_COMM_WORLD, &status);
-
-	if (status.MPI_TAG == TAGDECI) {
-		// on est pas decideur
-		// listen and propagate to neighbor except status.MPI_SOURCE
-	} else (status.MPI_TAG == TAGCALC){
-		// on est decideur
-		// propagate value
+	// Sinon c'est un message venant d'un décideur donc on transmet aux 
+	// autres voisins.
+	else{ 
+		for (i = 0; i < nb_voisins; i++){
+			if(voisins[i]!=status.MPI_SOURCE)
+				MPI_Send(&local_value, 1, MPI_INT, voisins[i], TAGDECI, MPI_COMM_WORLD);
+		}
 	}
-
+	
+	printf("Process %d ends with the value %d.\n",rang, local_value);
 }
 
 /******************************************************************************/
 
 int main (int argc, char* argv[]) {
-   int nb_proc,rang;
+   int nb_proc;
    MPI_Init(&argc, &argv);
    MPI_Comm_size(MPI_COMM_WORLD, &nb_proc);
 
    if (nb_proc != NB_SITE+1) {
-	  printf("Nombre de processus incorrect !\n");
+	  printf("Nombre de processus incorrect, il en faut %d !\n", NB_SITE+1);
 	  MPI_Finalize();
-	  exit(2);
+	  return 0;
    }
   
    MPI_Comm_rank(MPI_COMM_WORLD, &rang);
@@ -105,10 +116,10 @@ int main (int argc, char* argv[]) {
 	  simulateur();
    } else {
 	  initialize_values();
-	  // show_initial(rang);
 	  calcul_min(rang);
    }
   
    MPI_Finalize();
+   free(voisins);
    return 0;
 }
