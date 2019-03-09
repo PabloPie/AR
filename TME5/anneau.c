@@ -33,7 +33,7 @@ int main(int argc, char* argv[])
 	int recv;
 	while(leader==-1)
 	{
-		MPI_Recv(&recv, sizeof(int), MPI_INT, MPI_ANY_SOURCE, MPI_ANY_TAG, MPI_COMM_WORLD, &status);
+		MPI_Recv(&recv, 1, MPI_INT, MPI_ANY_SOURCE, MPI_ANY_TAG, MPI_COMM_WORLD, &status);
 		if(status.MPI_TAG == TAGINIT)
 		{
 			if(initiateur)
