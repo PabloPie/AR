@@ -8,7 +8,6 @@
 #define TAGINIT	0
 #define TAGREVEIL 1
 #define TAGIDENT 2
-#define TAGLEADER 3
 
 
 static int nb_voisins, rang, initiateur, local_value, reveil, leader, recv, ident_recues, parent;
