@@ -3,154 +3,176 @@
 #include <stdlib.h>
 #include <time.h>
 
+#define M		5	// Nombre de bits
+#define PAIRS	4	// Nombre de pairs
 
-#define M		6
-#define PAIRS	10
+#include "exercice1.h"
 
+// pair courant (contient id mpi et id chord)
+static pair this;
 
-typedef struct pair {
-	int rang;
-	int chordid;
-} pair;
-
-#define INITIATEUR	0
-#define TAGINIT		0
-#define TAGFIN		1
-#define TAGRECHERCHE	2
-#define SIZE 1 << M
+// liste des fingers du pair
+// le premier finger est aussi son successeur
 static pair fingers[M];
-static pair successeur;
-static pair id;
-static int rang;
 
-static int I[SIZE]; // I == K
-static inline int f(int v) { // f(x) == g(x') car I == K
-	//return I[v%(SIZE)];
-	switch(v) {
-		case 0 :
-			return 2;
-		break;
-		case 1:
-			return 7;
-		break;
-		case 2: return 13; break;
-		case 3: return 14; break;
-		case 4: return 21; break;
-		case 5: return 38; break;
-		case 6: return 42; break;
-		case 7: return 48; break;
-		case 8: return 51; break;
-		case 9: return 59; break;
-		default: return -1;
-	}
-}
-
-inline static void init_ensemble_I() {
-	printf("Initialisation de l'ensemble I...\n");
-	int i,j,end,value;
-	for(i=0;i<SIZE;i++) {
-		while(1) {
-			end = 1;
-			value = rand()%(SIZE);
-			for(j=0;j<i;j++) {
-				if(value == I[j]) {
-					end = 0;
-					break;
-				}
-			}
-			if(end) break;
-		}
-		I[i] = value;
-	}
-	printf("Ensemble I initialisé !\n");
-}
-
-static int compare_pair(void const *a, void const *b)
+void simulateur()
 {
-	pair* pa = (pair*)a;
-	pair* pb = (pair*)b;
-	return pa->chordid - pb->chordid;
-}
-	
-void simulateur(void) {
-	
-	//srand(time(NULL));
-	init_ensemble_I();
-	
-	int i;
+	/* DEBUT INITIALISATION DES PAIRS */
+	srand(time(NULL));
+	init_ensemble_I();			// création de l'ensemble I
 	
 	pair pairs[PAIRS];			// Liste des pairs
 	pair fingers[PAIRS][M];		// Liste des fingers de chaque pair
 	
 	// Tirage aléatoire des id des pairs
-	for(i=0;i<PAIRS;i++) pairs[i].chordid = f(i);
+	for(int i=0;i<PAIRS;i++) pairs[i].chordid = f(i);
 	qsort(&pairs, PAIRS, sizeof(pair), &compare_pair); // tri par ordre croissant
-	for(i=0;i<PAIRS;i++) pairs[i].rang = i+1; // le rang mpi sans 0
+	for(int i=0;i<PAIRS;i++) pairs[i].rang = i+1; // le rang mpi sans 0
 
 	printf("IDs des pairs : ");
-	for(i=0;i<PAIRS;i++) printf("{%d;%d} ", pairs[i].rang, pairs[i].chordid);
+	for(int i=0;i<PAIRS;i++) printf("{%d;%d} ", pairs[i].rang, pairs[i].chordid);
 	printf("\n");
 
-	// Initialisation des fingers
-	for(i=0;i<PAIRS*M;i++) {
-		fingers[i/M][i%M].rang = -1;
-		fingers[i/M][i%M].chordid = -1;
-	}
-	// Calcul des fingers
+	// Mise à zéro des fingers
+	for(int i=0;i<PAIRS*M;i++) fingers[i/M][i%M].rang = -1;
 
-	for(i=0;i<PAIRS;i++) { // Pour chaque pair
-		printf("Fingers de {%d;%d} :", pairs[i].rang, pairs[i].chordid);
-
+	// Calcul des fingers pour chaque pair
+	for(int i=0;i<PAIRS;i++)
+	{
 		// Pour chaque finger de pair[i]
-		int j;
-		for(j=0;j<M;j++) { 
-			int inf = (pairs[i].chordid + (1 << j))%(1 << M);
-			pair* pair_proche = &pairs[0];
-			int k=0;
-			// recherche du pair le plus proche de la valeur de inf
-			while(k++<PAIRS && pair_proche->chordid < inf) pair_proche++;
-			// pair_proche pointe vers le finger
-			fingers[i][j] = *pair_proche;
+		for(int j=0;j<M;j++)
+		{
+			int id = (pairs[i].chordid + (1 << j))%(1 << M);
+			// On cherche le pair qui gère id
+			for(int k=0;k<PAIRS; k++)
+			{
+				// prédécesseur de pair[k] (ordre cyclique)
+				pair* pair_precedent = &pairs[(PAIRS+k-1)%PAIRS];
 
-			printf("\t{%d;%d}", fingers[i][j].rang, fingers[i][j].chordid);
+				// Si id appartient à l'intervalle ] pairs(k-1) ; pairs(k) ] alors pair[k] est son gestionnaire
+				if( dans_intervalle_b_inclus(id, pair_precedent->chordid, pairs[k].chordid) ) {
+					fingers[i][j] = pairs[k];
+					break;
+				}
+			}	
 		}
-		printf("\n");
-	}
-					   
-	for(i=0; i<PAIRS; i++){
 		// envoi de l'id local
-		MPI_Send(&pairs[i], 2, MPI_INT, pairs[i].rang, TAGINIT, MPI_COMM_WORLD);
-		// envoi de l'id du successeur
-		MPI_Send(&fingers[i][0], 2, MPI_INT, pairs[i].rang, TAGINIT, MPI_COMM_WORLD);
+		MPI_Send(&pairs[i], 1, MPI_PAIR, pairs[i].rang, TAG_INIT, MPI_COMM_WORLD);
 		// envoi des fingers
-		MPI_Send(&fingers[i], 2*M, MPI_INT, pairs[i].rang, TAGINIT, MPI_COMM_WORLD);
+		MPI_Send(&fingers[i], M, MPI_PAIR, pairs[i].rang, TAG_INIT, MPI_COMM_WORLD);
 	}
+
+	// Affiche les fingers de chaque pair
+	affichage_fingers(pairs, fingers);
 	
-	sleep(5);
-	for(i=0; i<PAIRS; i++) MPI_Send(NULL, 0, MPI_INT, pairs[i].rang, TAGFIN, MPI_COMM_WORLD);
+	MPI_Barrier(MPI_COMM_WORLD);
+	// A patir d'ici, tous les pairs sont initialisés (MPI_barrier), on va pouvoir faire des requêtes
+
+	/* FIN INITIALISATION DES PAIRS */
+	
+	int recherche = rand()%(SIZE);
+	int pair_initiateur_recherche = 1+ rand()%(PAIRS);
+	printf("REQ : demande %d à %d.\n", recherche, pair_initiateur_recherche);
+
+	pair responsable;
+
+	// On envoie un message de recherche au pair tiré aléatoirement
+	MPI_Send(&recherche, 1, MPI_INT, pair_initiateur_recherche, TAG_RECHERCHE, MPI_COMM_WORLD);
+	
+	// On attend la réponse
+	MPI_Recv(&responsable, 1, MPI_PAIR, MPI_ANY_SOURCE, TAG_RESULTAT, MPI_COMM_WORLD, NULL);
+	
+	// On envoie un message de fin à tous les processus
+	for(int i=0; i<PAIRS; i++) MPI_Send(NULL, 0, MPI_INT, pairs[i].rang, TAG_FIN, MPI_COMM_WORLD);
+}
+
+
+// Réalise une recherche de la clé @cle.
+// Si @initiateur est nul alors c'est que le processus appelant est initiateur.
+void rechercher(int cle, pair* initiateur)
+{
+	if(!initiateur) initiateur = &this;
+	
+	// Si la clé est dans l'intervalle ]this , successeur] alors c'est notre successeur qui la gère
+	if(dans_intervalle_b_inclus(cle, this.chordid, fingers[0].chordid))
+	{
+		// envoi de la clé recherchée au successeur
+		MPI_Send(&cle, 1, MPI_INT, fingers[0].rang, TAG_RESPONSABLE, MPI_COMM_WORLD);
+
+		// envoi de l'id du pair courrant pour savoir qui est l'initiateur
+		MPI_Send(initiateur, 1, MPI_PAIR, fingers[0].rang, TAG_RESPONSABLE, MPI_COMM_WORLD);
+
+		printf("{%d,%d} a transféré la recherche au pair responsable ({%d,%d}) de %d.\n", this.rang, this.chordid, fingers[0].rang, fingers[0].chordid,  cle);
+	}
+	else // Sinon, on transmet à notre meilleur finger (celui qui est le plus proche ou le plus grand)
+	{ 
+		pair* finger_proche = NULL;
+		int trouve = 0;
+		for(int i=M-1;i>=0;i--)
+		{
+			// Si le finger est dans l'intervalle fermé ]this , cle[ alors on lui envoie la requête
+			if(dans_intervalle_ferme(fingers[i].chordid,this.chordid, cle))
+			{
+				finger_proche=&fingers[i];
+				trouve = 1;
+				break;
+			}
+		}
+		// Si on a pas trouvé on passe la requête à notre successeur
+		if(!trouve) finger_proche=&fingers[0];
+
+		// envoi de la clé au finger le plus proche de la valeur reçue
+		MPI_Send(&cle, 1, MPI_INT, finger_proche->rang, TAG_TRANSFERT, MPI_COMM_WORLD);
+
+		// envoi de l'id du pair courrant pour savoir qui est l'initiateur
+		MPI_Send(initiateur, 1, MPI_PAIR, finger_proche->rang, TAG_TRANSFERT, MPI_COMM_WORLD);
+
+		printf("{%d,%d} a transféré la recherche de %d à {%d,%d}.\n", this.rang, this.chordid, cle, finger_proche->rang, finger_proche->chordid);
+	}
 }
 
 void main_pair()
 {
 	MPI_Status status;
-	MPI_Recv(&id, 2, MPI_INT, INITIATEUR, TAGINIT, MPI_COMM_WORLD, &status);
-	MPI_Recv(&successeur, 2, MPI_INT, INITIATEUR, TAGINIT, MPI_COMM_WORLD, &status);
-	MPI_Recv(&fingers, 2*M, MPI_INT, INITIATEUR, TAGINIT, MPI_COMM_WORLD, &status);
-	printf("{%d;%d} est initialisé : successeur {%d;%d} et fingers reçus\n", id.rang, id.chordid, successeur.rang, successeur.chordid);
-	while(1) {
-		int valeur;
-		MPI_Recv(&valeur, 1, MPI_INT, MPI_ANY_SOURCE, MPI_ANY_TAG, MPI_COMM_WORLD, &status);
-		
-		if(status.MPI_TAG == TAGRECHERCHE) {
-			
+	// attend les informations du pair courrant (this)
+	MPI_Recv(&this, 1, MPI_PAIR, INITIATEUR, TAG_INIT, MPI_COMM_WORLD, &status);
+	// attend les fingers du pair courrant
+	MPI_Recv(&fingers, M, MPI_PAIR, INITIATEUR, TAG_INIT, MPI_COMM_WORLD, &status);
+
+	// attend que tous les pairs soient initialisés
+	MPI_Barrier(MPI_COMM_WORLD);
+
+	int run = 1;
+	while(run) {
+		int valeur_recue;
+		pair initiateur;
+
+		MPI_Recv(&valeur_recue, 1, MPI_INT, MPI_ANY_SOURCE, MPI_ANY_TAG, MPI_COMM_WORLD, &status);
+		switch(status.MPI_TAG) {
+			case TAG_RECHERCHE:
+				printf("{%d,%d} a reçu une recherche pour %d.\n", this.rang, this.chordid, valeur_recue);
+				rechercher(valeur_recue, NULL);
+				break;
+			case TAG_TRANSFERT:
+				MPI_Recv(&initiateur, 1, MPI_PAIR, MPI_ANY_SOURCE, MPI_ANY_TAG, MPI_COMM_WORLD, &status);
+				rechercher(valeur_recue, &initiateur);
+				break;
+			case TAG_RESPONSABLE:
+				MPI_Recv(&initiateur, 1, MPI_PAIR, MPI_ANY_SOURCE, MPI_ANY_TAG, MPI_COMM_WORLD, &status);
+				MPI_Send(&this, 1, MPI_PAIR, INITIATEUR, TAG_RESULTAT, MPI_COMM_WORLD);
+				printf("{%d,%d} a envoyé sa réponse pour %d au processus simulateur.\n", this.rang, this.chordid, valeur_recue);
+				break;
+			case TAG_FIN:
+				run = 0;
+				break;
 		}
-		else if(status.MPI_TAG == TAGFIN) break;
 	}
 }
 
 /******************************************************************************/
 
-int main (int argc, char* argv[]) {
+int main(int argc, char* argv[])
+{
 	int nb_proc;
 	MPI_Init(&argc, &argv);
 	MPI_Comm_size(MPI_COMM_WORLD, &nb_proc);
@@ -162,6 +184,13 @@ int main (int argc, char* argv[]) {
 	}
 
 	MPI_Comm_rank(MPI_COMM_WORLD, &rang);
+
+	// Création d'un nouveau type MPI (pour transmettre la structure pair)
+	int lengths[] = {1,1};
+	MPI_Datatype types[] = {MPI_INT, MPI_INT};
+	MPI_Aint offsets[] = {offsetof(pair, rang),offsetof(pair, chordid)};
+	MPI_Type_create_struct(2, lengths, offsets, types, &MPI_PAIR);
+	MPI_Type_commit(&MPI_PAIR);
 
 	if (rang == 0) simulateur();
 	else main_pair();
