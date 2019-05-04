@@ -25,13 +25,10 @@ static int rang; // rang mpi
 static int I[SIZE]; // I == K
 static inline int f(int v) { // f(x) == g(x') car I == K
 	return I[v%(SIZE)];
-	/*switch(v) {
-		case 0 :
-			return 2;
-		break;
-		case 1:
-			return 7;
-		break;
+// simulation avec pairs du td :
+/*	switch(v) {
+		case 0 : return 2; break;
+		case 1: return 7; break;
 		case 2: return 13; break;
 		case 3: return 14; break;
 		case 4: return 21; break;
@@ -40,7 +37,7 @@ static inline int f(int v) { // f(x) == g(x') car I == K
 		case 7: return 48; break;
 		case 8: return 51; break;
 		case 9: return 59; break;
-		default: return -1;
+		default: return I[v%(SIZE)];
 	}*/
 }
 
@@ -72,7 +69,7 @@ static int compare_pair(void const *a, void const *b)
 	return pa->chordid - pb->chordid;
 }
 
-// teste si k se trouve dans l'intervalle cyclique ]a,b[ == (a,b)
+// teste si k se trouve dans l'intervalle ]a,b[ == (a,b)
 int dans_intervalle_ferme(int k, int a, int b)
 {
 	return (a<b) ? (k > a && k < b) : ((k > a && k < SIZE) || (k > 0 && k < b));
@@ -81,7 +78,7 @@ int dans_intervalle_ferme(int k, int a, int b)
 	return 0;*/
 }
 
-// teste si k se trouve dans l'intervalle cyclique [a,b[ == [a,b)
+// teste si k se trouve dans l'intervalle [a,b[ == [a,b)
 /*int dans_intervalle_a_inclus(int k, int a, int b)
 {
 	return (a<b) ? (k >= a && k < b) : ((k >= a && k < SIZE) || (k >= 0 && k < b));
@@ -90,7 +87,7 @@ int dans_intervalle_ferme(int k, int a, int b)
 	return 0;*/
 //}
 
-// teste si k se trouve dans l'intervalle cyclique ]a, b] == (a,b]
+// teste si k se trouve dans l'intervalle ]a, b] == (a,b]
 int dans_intervalle_b_inclus(int k, int a, int b)
 {
 	return (a<b) ? (k > a && k <= b) : ((k > a && k < SIZE) || (k >= 0 && k <= b));

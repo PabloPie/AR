@@ -3,8 +3,8 @@
 #include <stdlib.h>
 #include <time.h>
 
-#define M		5	// Nombre de bits
-#define PAIRS	4	// Nombre de pairs
+#define M		6	// Nombre de bits
+#define PAIRS	10	// Nombre de pairs
 
 #include "exercice1.h"
 
@@ -70,42 +70,42 @@ void simulateur()
 
 	/* FIN INITIALISATION DES PAIRS */
 	
-	int recherche = rand()%(SIZE);
+	int recherche = rand()%10000;
 	int pair_initiateur_recherche = 1+ rand()%(PAIRS);
-	printf("REQ : demande %d à %d.\n", recherche, pair_initiateur_recherche);
-
 	pair responsable;
 
+	printf("REQ : demande %d (%d) au pair %d.\n", recherche, recherche%(SIZE), pair_initiateur_recherche);
 	// On envoie un message de recherche au pair tiré aléatoirement
 	MPI_Send(&recherche, 1, MPI_INT, pair_initiateur_recherche, TAG_RECHERCHE, MPI_COMM_WORLD);
-	
+
 	// On attend la réponse
 	MPI_Recv(&responsable, 1, MPI_PAIR, MPI_ANY_SOURCE, TAG_RESULTAT, MPI_COMM_WORLD, NULL);
-	
+
 	// On envoie un message de fin à tous les processus
 	for(int i=0; i<PAIRS; i++) MPI_Send(NULL, 0, MPI_INT, pairs[i].rang, TAG_FIN, MPI_COMM_WORLD);
 }
 
 
-// Réalise une recherche de la clé @cle.
+// Réalise une recherche de la clé @recherche.
 // Si @initiateur est nul alors c'est que le processus appelant est initiateur.
-void rechercher(int cle, pair* initiateur)
+void rechercher(int recherche, pair* initiateur)
 {
+	int cle = recherche%SIZE;
 	if(!initiateur) initiateur = &this;
 	
 	// Si la clé est dans l'intervalle ]this , successeur] alors c'est notre successeur qui la gère
 	if(dans_intervalle_b_inclus(cle, this.chordid, fingers[0].chordid))
 	{
 		// envoi de la clé recherchée au successeur
-		MPI_Send(&cle, 1, MPI_INT, fingers[0].rang, TAG_RESPONSABLE, MPI_COMM_WORLD);
+		MPI_Send(&recherche, 1, MPI_INT, fingers[0].rang, TAG_RESPONSABLE, MPI_COMM_WORLD);
 
 		// envoi de l'id du pair courrant pour savoir qui est l'initiateur
 		MPI_Send(initiateur, 1, MPI_PAIR, fingers[0].rang, TAG_RESPONSABLE, MPI_COMM_WORLD);
 
-		printf("{%d,%d} a transféré la recherche au pair responsable ({%d,%d}) de %d.\n", this.rang, this.chordid, fingers[0].rang, fingers[0].chordid,  cle);
+		printf("{%d,%d} a transféré la recherche au pair responsable ({%d,%d}) de %d.\n", this.rang, this.chordid, fingers[0].rang, fingers[0].chordid, recherche);
 	}
 	else // Sinon, on transmet à notre meilleur finger (celui qui est le plus proche ou le plus grand)
-	{ 
+	{
 		pair* finger_proche = NULL;
 		int trouve = 0;
 		for(int i=M-1;i>=0;i--)
@@ -122,12 +122,12 @@ void rechercher(int cle, pair* initiateur)
 		if(!trouve) finger_proche=&fingers[0];
 
 		// envoi de la clé au finger le plus proche de la valeur reçue
-		MPI_Send(&cle, 1, MPI_INT, finger_proche->rang, TAG_TRANSFERT, MPI_COMM_WORLD);
+		MPI_Send(&recherche, 1, MPI_INT, finger_proche->rang, TAG_TRANSFERT, MPI_COMM_WORLD);
 
 		// envoi de l'id du pair courrant pour savoir qui est l'initiateur
 		MPI_Send(initiateur, 1, MPI_PAIR, finger_proche->rang, TAG_TRANSFERT, MPI_COMM_WORLD);
 
-		printf("{%d,%d} a transféré la recherche de %d à {%d,%d}.\n", this.rang, this.chordid, cle, finger_proche->rang, finger_proche->chordid);
+		printf("{%d,%d} a transféré la recherche de %d à {%d,%d}.\n", this.rang, this.chordid, recherche, finger_proche->rang, finger_proche->chordid);
 	}
 }
 
