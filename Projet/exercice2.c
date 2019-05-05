@@ -54,6 +54,7 @@ void main_pair()
 					if(election.distance == -1)
 					{
 						//perdu
+						nb_retours_round = 0;
 					}
 					else if(election.distance == 0)
 					{
@@ -68,7 +69,8 @@ void main_pair()
 					}
 					else if(election.distance > 0)
 					{
-						// on a gagne
+						printf("ON A GAGNE\n");
+						// on a gagne s'execute deux fois
 						for(int i=1;i<=PAIRS;i++) if(i!=this.rang)MPI_Send(&election, 1, MPI_SINCLAIR, i, TAG_LEADER, MPI_COMM_WORLD);
 						run = 0;
 					}
@@ -91,6 +93,14 @@ void main_pair()
 							leader = election.initiateur;
 							//printf("P%d leader=%d\n", this.rang, leader);
 						}
+						else if(election.initiateur < leader)
+						{
+							// est-ce vraiment utile de prévenir l'initiateur qu'il a perdu ? vu que async
+							election.distance = -1;
+							MPI_Send(&election, 1, MPI_SINCLAIR, status.MPI_SOURCE, TAG_ELECTION, MPI_COMM_WORLD);
+							continue;
+						}
+						
 						election.distance--;
 						if(election.distance == 0)
 						{
