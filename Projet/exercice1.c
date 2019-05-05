@@ -90,7 +90,7 @@ void simulateur()
 // Si @initiateur est nul alors c'est que le processus appelant est initiateur.
 void rechercher(int recherche, pair* initiateur)
 {
-	int cle = recherche%SIZE;
+	int cle = recherche%(SIZE);
 	if(!initiateur) initiateur = &this;
 	
 	// Si la clé est dans l'intervalle ]this , successeur] alors c'est notre successeur qui la gère
