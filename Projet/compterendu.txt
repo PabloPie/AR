@@ -1,0 +1,185 @@
+Exercice 1 :
+
+Note MPI : on utilise une structure C nommée pair, pour l'utiliser dans les 
+messages, on a également créé un type MPI_Datatype (voir code du main).
+
+1) Pseudocode recherche d'une clé:
+
+	Note : this est la variable contenant les identifiants du pair courrant.
+
+	Si on reçoit un message avec le tag TAG_RECHERCHE alors :
+		Si clé est dans l'intervalle ]this.chordid , successeur.chordid] alors :
+			c'est notre successeur qui gère cette clé donc on lui envoie un 
+			message ayant comme donnée la clé donnée et le tag TAG_RESPONSABLE.
+		Sinon
+			On recherche notre finger meilleur finger : pour chaque finger de 
+			la liste, si l'id chord du finger se trouve dans l'intervalle fermé 
+			]this.chordid , cle[ alors on lui transmet la requête avec un 
+			message ayant le tag TAG_RECHERCHE et la clé en donnée.
+
+			Si aucun finger n'a été choisi ci-dessus, alors on transmet la 
+			requête avec un message ayant le tag TAG_RECHERCHE et la clé 
+			en donnée à notre succésseur.
+		Fin si
+	Si on reçoit un message avec le tag TAG_RESPONSABLE alors :
+		On est responsable de la clé reçu. On répond au simulateur.
+	Fin si
+
+Exercice 2 :
+
+1) On souhaite initialiser la DHT avec une complexité en messages sous 
+quadratique. Pour cela, on propose un algorithme en cinq étapes :
+	1 - Une élection de leader (algorithme de Sinclair car complexité nlogn). Le
+		leader calcule le nombre de pairs dans l'anneau (voir pseudocode) et 
+		l'envoie à son voisin de droite (le message fait le tour de l'anneau).
+	2 - Construction d'une liste des pairs : le leader envoie à son voisin de 
+		droite un message contenant une liste d'ID. Chaque pair va ajouter son 
+		ID dans la liste et transmettre à son voisin de droite jusqu'à revenir 
+		au leader.
+	3 - Le leader reçoit à la liste des pairs, maintenant complète. Il la tri et
+		la fait circuler tout autour de	l'anneau.
+	4 - Les pairs construisent leur table de fingers localement.
+	5 - Une fois la table construite, le pair l'affiche et s'arrête.
+
+	Pseudo code :
+	
+	A noter : le calcul des fingers se déroule de la même manière que pour 
+	l'exercice 1. De plus, le nombre de pairs n'est pas connu par avance (au 
+	contraire de l'exercice 1 ou on utilisait une constante) mais calculé par le
+	leader après son élection (expliqué dans le pseudocode).
+
+	Il y a 3 types de messages :
+	-	TAG_ELECTION qui contient comme donnée le rang de l'initiateur du round 
+		ainsi que la distance à parcourir. Si la distance vaut 0 ou -1 (si 
+		l'initiateur a été battu par un autre) alors l'information doit remonter
+		jusqu'à l'initiateur. Le fait d'utiliser -1 nous permet de n'utiliser 
+		qu'un tag pour toute l'élection contrairement au TD.
+	- TAG_LISTPAIRS_BUILD pour construire la liste des pairs qui contient comme 
+		donnée un entier (nombre de pairs) pour le premier message avec ce tag 
+		et un tableau d'entiers la seconde fois (liste des pairs).
+	- TAG_LISTPAIRS_COMPLETE pour annoncer la liste des pairs complète.
+
+	Si le message reçu a pour tag TAG_ELECTION alors :
+		Si initiateur du round == pair courrant alors :
+			Si distance == -1 alors :
+				(ce message arrive deux fois : du voisin de gauche et de droite)
+				Le pair courrant a été battu, il n'est plus initiateur.
+
+			Sinon si distance == 0 alors :
+				(ce message arrive deux fois : du voisin de gauche et de droite)
+				Si on a reçu deux fois ce message alors :
+					On a gangé un round, on passe au suivant (distance =2^(k+1))
+					On envoie le nouveau round à nos voisins
+				Fin si
+
+			Sinon (le cas où distance >=1) :
+				(ce message arrive deux fois : du voisin de gauche et de droite)
+				On a gagné l'élection car on n'a pas été battu et on a déjà 
+				parcouru tout l'anneau.
+				
+				On connait le nombre de pairs sur l'anneau : 
+					nb_pairs = 2^k - distance + 1
+					
+				On envoie à notre voisin de droite le nombre de pairs sur 
+				l'anneau avec le tag TAG_LISTPAIRS_BUILD.
+				
+				On construit un tableau de taille nb_pairs où l'on place notre 
+				identifiant chord à la position correspondante à notre rang mpi.
+				
+				On envoie ce tableau à notre voisin de droite avec le tag 
+				TAG_LISTPAIRS_BUILD.
+				
+			Fin si
+
+		Sinon (le cas où l'initiateur n'est pas le pair courrant) :
+			Si distance == -1 alors :
+				L'initiateur a déjà été battu, on transmet l'information au 
+				voisin qui n'a pas émi ce message.
+			
+			Sinon si distance == 0 alors :
+				L'initiateur a gagné un round, on transmet l'information au 
+				voisin qui n'a pas émi ce message.
+			
+			Sinon (cas où distance >= 1) :
+				Si initiateur < leader_connu alors :
+					On envoie à l'emetteur du message que l'initiateur a été 
+					battu (donc distance=-1, initiateur a la même valeur).
+				
+				Sinon si initiateur <= leader_connu alors :
+					Si initiateur < leader_connu alors :
+						L'initiateur devient le nouveau leader du pair.
+					Fin si
+					
+					Si distance == 1 alors:
+						Le round est terminé, on envoie à l'emetteur du message 
+						que le round est terminé sans être battu (distance = 0).
+
+					Sinon (cas où distance > 1) :
+						distance = distance - 1
+						Le round n'est ni terminé, ni battu on envoie donc 
+						l'information au voisin n'ayant pas émi ce message avec
+						distance = distance - 1.
+					Fin si
+				Fin si
+			Fin si
+		Fin si
+		
+	Sinon si le message reçu a pour tag TAG_LISTPAIRS_BUILD alors :
+		Si on n'est pas le leader
+			La donnée reçue par ce message est le nombre de pairs qu'il y a dans
+			l'anneau, on stocke l'information dans la variable nb_pairs.
+			On attend un deuxième message avec le même tag, contenant une liste 
+			d'entiers de taille nb_pairs.
+			
+			A la réception de la liste, on ajoute notre identifiant chord à la 
+			position du rang mpi.
+			
+			Si notre voisin de droite n'est pas le leader alors on envoie le 
+			nombre de pairs à ce voisin.
+			
+			Quelque soit notre voisin de droite, on lui envoie la liste des 
+			pairs.
+			
+		Sinon (cas où on est le leader)
+			Le message de construction a fait le tour de l'anneau, le leader 
+			sait donc que la liste de pairs est complète.
+			
+			Le pair envoie à son voisin de droite cette liste avec le tag 
+			TAG_LISTPAIRS_COMPLETE.
+			
+			Le pair calcule ses fingers, les affiche et se termine.
+		Fin si
+
+	Sinon si le message reçu a pour tag TAG_LISTPAIRS_COMPLETE alors :
+		Le message contient la liste complète des pairs. Grâce à celle-ci, le 
+		pair calcule ses fingers et les affiche.
+		
+		Si le voisin de droite n'est pas le leader alors le pair le envoie la
+		liste des pairs complète.
+		
+		Le pair se termine.
+
+	Fin si
+		
+3) Justification :
+
+	- Les communications sont fiables et FIFO.
+	- Il y a au moins un initiateur pour l'élection (forcé par le simulateur)
+	- L'algorithme d'élection choisi aboutit forcément
+	- Si un message émi par leader lui revient c'est que tous les autres pairs 
+	l'ont eu également.
+
+4) Complexité :
+	
+	-	L'algorithme d'élection est en n*log(n)
+	-	Trois autres messages font le tour de l'anneau :
+			1 - le nombre de pairs calculé par le leader
+			2 - la construction de la liste
+			3 - la diffusion de la liste complète
+		Un message qui fait le tour de l'anneau coûte n messages. On fait trois 
+		tours donc cela coûte 3*n messages.
+		
+	Donc la complexité en nombre de message est : O(n*log(n) + 3n) = O(n*log(n))
+
+Exercice 3 :
+

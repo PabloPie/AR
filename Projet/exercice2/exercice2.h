@@ -17,21 +17,20 @@ typedef struct sinclair_round
 } sinclair_round;
 MPI_Datatype MPI_SINCLAIR;
 
-#define INITIATEUR				0
 #define TAG_INIT				0
 #define TAG_ELECTION			1
-#define TAG_LEADER				2
 #define TAG_LISTPAIRS_BUILD		3
 #define TAG_LISTPAIRS_COMPLETE	4
 #define SIZE 1 << M
 
-static int rang; // rang mpi
-
+// ensemble I
 static int I[SIZE]; // I == K
+
+// fonction de hachage des clés
 static inline int f(int v) { // f(x) == g(x') car I == K
 	return I[v%(SIZE)];
 // simulation avec pairs du td :
-/*	switch(v) {
+	/*switch(v) {
 		case 0 : return 2; break;
 		case 1: return 7; break;
 		case 2: return 13; break;
@@ -46,7 +45,8 @@ static inline int f(int v) { // f(x) == g(x') car I == K
 	}*/
 }
 
-inline static void init_ensemble_I()
+// Tirage aléatoire de l'ensemble I avec unicité
+static inline void init_ensemble_I()
 {
 	printf("Initialisation de l'ensemble I...\n");
 	int end,value;
@@ -67,6 +67,7 @@ inline static void init_ensemble_I()
 	printf("Ensemble I initialisé !\n");
 }
 
+// pour la fonction qsort
 static int compare_pair(void const *a, void const *b)
 {
 	pair* pa = (pair*)a;
@@ -75,30 +76,17 @@ static int compare_pair(void const *a, void const *b)
 }
 
 // teste si k se trouve dans l'intervalle ]a,b[ == (a,b)
-int dans_intervalle_ferme(int k, int a, int b)
+static inline int dans_intervalle_ferme(int k, int a, int b)
 {
 	return (a<b) ? (k > a && k < b) : ((k > a && k < SIZE) || (k > 0 && k < b));
 }
 
 // teste si k se trouve dans l'intervalle ]a, b] == (a,b]
-int dans_intervalle_b_inclus(int k, int a, int b)
+static inline int dans_intervalle_b_inclus(int k, int a, int b)
 {
 	return (a<b) ? (k > a && k <= b) : ((k > a && k < SIZE) || (k >= 0 && k <= b));
 }
 
-
-
-
-static inline void affichage_fingers(pair* pairs, pair fingers[PAIRS][M])
-{
-	printf("------------------------------------------------------------\n");
-	for(int i=0;i<PAIRS;i++) {
-		printf("Fingers de {%d;%d} :", pairs[i].rang, pairs[i].chordid);
-		for(int j=0;j<M;j++) printf("\t{%d;%d}", fingers[i][j].rang, fingers[i][j].chordid);
-		printf("\n");
-	}
-	printf("------------------------------------------------------------\n");
-}
 
 
 #endif
