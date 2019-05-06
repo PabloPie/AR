@@ -1,3 +1,5 @@
+Binome : MILLET & PIEDRAFITA
+
 Exercice 1 :
 
 Note MPI : on utilise une structure C nommée pair, pour l'utiliser dans les 
@@ -212,3 +214,54 @@ quadratique. Pour cela, on propose un algorithme en cinq étapes :
 
 Exercice 3 :
 
+1) Description
+
+	Préconditions :
+	Les pairs ont une liste nommée inverse contenant les pairs ayant un finger 
+	sur eux. Un nouveau pair connait déjà son identifiant qui est unique et il 
+	connait un seul pair de l'anneau (choisi aléatoirement) au début.
+	
+	L'algorithme se décompose en 4 étapes :
+		1 - Le pair se connecte avec un identifiant CHORD unique.
+		2 - Le nouveau pair construit sa liste de fingers en demandant au pair 
+			connu qui gère pour chaque k la valeur (chordid+2^k)%2^M.
+		3 - Le pair inséré change l'ensemble des clés gérées par son successeur 
+			il faut donc que celui-ci prévienne les pairs de sa table inverse 
+			qu'il y a une mise à jour.
+		4 - Les pairs prévenus de cette mise à jour doivent recalculer leurs 
+			fingers.
+
+2) Pseudocode:
+
+	2 nouveaux types de message :
+		- TAG_REJOINT : pour prévenir notre succésseur qu'on s'est inséré et 
+			qu'il doit avertir les pairs l'utilisant comme finger de se mettre 
+			à jour.
+		- TAG_ACTUALISER : pour prévenir un pair qu'il doit mettre à jour ses 
+			fingers. La donnée associée est les identifiants du nouveau pair 
+			afin qu'il puisse vérifier s'il fait partie de ses nouveaux fingers.
+
+	Si message reçu a pour tag TAG_REJOINT alors:
+		La donnée associée à ce message est les id du pair emetteur.
+		Pour chaque pair de la liste inverse : envoi d'un message contenant en
+		donnée les id reçus et comme tag TAG_ACTUALISER.
+	Sinon si message reçu a pour tag TAG_ACTUALISER alors:
+		La donnée associée à ce message est les id du pair emetteur, on la place
+		dans la variable nouveau_pair.
+		Pour chaque finger :
+			id = (finger.chordid + (1 << i))%(1 << M)
+			Si finger == emetteur :
+				Si id pas dans ]nouveau_pair.chordid,finger.chordid] alors :
+					finger = nouveau_pair
+				Fin si
+			Fin si
+		Fin pour
+	Fin si
+
+3) Complexité :
+	- Construction des fingers en M*log(n) (M est le nombre de fingers)
+	- Avertir le successeur = 1 message
+	- Avertir les fingers de la table inverse = I messages où I est le nombre de 
+		fingers concernés.
+		
+	Donc la complexité en nombre de message est O(M*log(n) + 1 + I) = O(log(n)).
