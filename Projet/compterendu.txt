@@ -7,10 +7,13 @@ messages, on a également créé un type MPI_Datatype (voir code du main).
 
 	Note : this est la variable contenant les identifiants du pair courrant.
 
-	Si on reçoit un message avec le tag TAG_RECHERCHE alors :
+	recherche(cle, rang_initiateur) {
 		Si clé est dans l'intervalle ]this.chordid , successeur.chordid] alors :
 			c'est notre successeur qui gère cette clé donc on lui envoie un 
 			message ayant comme donnée la clé donnée et le tag TAG_RESPONSABLE.
+
+			On lui envoie un deuxième message avec le tag TAG_RESPONSABLE 
+			contenant l'identifiant CHORD du processus ayant initié la recherche
 		Sinon
 			On recherche notre finger meilleur finger : pour chaque finger de 
 			la liste, si l'id chord du finger se trouve dans l'intervalle fermé 
@@ -18,12 +21,38 @@ messages, on a également créé un type MPI_Datatype (voir code du main).
 			message ayant le tag TAG_RECHERCHE et la clé en donnée.
 
 			Si aucun finger n'a été choisi ci-dessus, alors on transmet la 
-			requête avec un message ayant le tag TAG_RECHERCHE et la clé 
+			requête avec un message ayant le tag TAG_TRANSFERT et la clé 
 			en donnée à notre succésseur.
+			
+			On lui envoie un deuxième message avec le tag TAG_TRANSFERT 
+			contenant l'identifiant CHORD du processus ayant initié la recherche
 		Fin si
-	Si on reçoit un message avec le tag TAG_RESPONSABLE alors :
-		On est responsable de la clé reçu. On répond au simulateur.
-	Fin si
+	}
+
+	Main_Pair() {
+		Si on reçoit un message avec le tag TAG_RECHERCHE alors :
+			On place la donnée du message dans la variable cle.
+			
+			recherche(cle, rang_emetteur)
+
+		Sinon si on reçoit un message avec le tag TAG_TRANSFERT alors :
+			On place la donnée du message dans la variable cle.
+
+			On attend un deuxième message portant le tag TAG_TRANSFERT contenant
+			l'id chord de l'initiateur que l'on place dans la variable rang_init
+			
+			recherche(cle, rang_init)
+			
+		Sinon si on reçoit un message avec le tag TAG_RESPONSABLE alors :
+			On place la donnée du message dans la variable cle.
+
+			On attend un deuxième message portant le tag TAG_RESPONSABLE contenant
+			l'id chord de l'initiateur que l'on place dans la variable rang_init
+			
+			On envoie un message avec le tag TAG_RESULTAT au processus ayant le 
+			rang mpi rang_init. C'est la réponse de la recherche.
+		Fin si
+	}
 
 Exercice 2 :
 

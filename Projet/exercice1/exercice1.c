@@ -87,11 +87,10 @@ void simulateur()
 
 
 // Réalise une recherche de la clé @recherche.
-// Si @initiateur est nul alors c'est que le processus appelant est initiateur.
-void rechercher(int recherche, pair* initiateur)
+// @initiateur est le rang mpi du processus ayant initialisé la recherche
+void rechercher(int recherche, int initiateur)
 {
 	int cle = recherche%(SIZE);
-	if(!initiateur) initiateur = &this;
 	
 	// Si la clé est dans l'intervalle ]this , successeur] alors c'est notre successeur qui la gère
 	if(dans_intervalle_b_inclus(cle, this.chordid, fingers[0].chordid))
@@ -100,7 +99,7 @@ void rechercher(int recherche, pair* initiateur)
 		MPI_Send(&recherche, 1, MPI_INT, fingers[0].rang, TAG_RESPONSABLE, MPI_COMM_WORLD);
 
 		// envoi de l'id du pair courrant pour savoir qui est l'initiateur
-		MPI_Send(initiateur, 1, MPI_PAIR, fingers[0].rang, TAG_RESPONSABLE, MPI_COMM_WORLD);
+		MPI_Send(&initiateur, 1, MPI_INT, fingers[0].rang, TAG_RESPONSABLE, MPI_COMM_WORLD);
 
 		printf("{%d,%d} a transféré la recherche au pair responsable ({%d,%d}) de %d.\n", this.rang, this.chordid, fingers[0].rang, fingers[0].chordid, recherche);
 	}
@@ -125,7 +124,7 @@ void rechercher(int recherche, pair* initiateur)
 		MPI_Send(&recherche, 1, MPI_INT, finger_proche->rang, TAG_TRANSFERT, MPI_COMM_WORLD);
 
 		// envoi de l'id du pair courrant pour savoir qui est l'initiateur
-		MPI_Send(initiateur, 1, MPI_PAIR, finger_proche->rang, TAG_TRANSFERT, MPI_COMM_WORLD);
+		MPI_Send(&initiateur, 1, MPI_INT, finger_proche->rang, TAG_TRANSFERT, MPI_COMM_WORLD);
 
 		printf("{%d,%d} a transféré la recherche de %d à {%d,%d}.\n", this.rang, this.chordid, recherche, finger_proche->rang, finger_proche->chordid);
 	}
@@ -146,27 +145,25 @@ void main_pair()
 
 	int run = 1;
 	while(run) {
-		int valeur_recue;
-		pair initiateur;
+		int valeur_recue; // valeur reçue dans les messages
+		int initiateur_rang; // rang initiateur de la recherche
 
 		MPI_Recv(&valeur_recue, 1, MPI_INT, MPI_ANY_SOURCE, MPI_ANY_TAG, MPI_COMM_WORLD, &status);
 		switch(status.MPI_TAG) {
 			// si on reçoit une demande de recherche
 			case TAG_RECHERCHE:
 				printf("{%d,%d} a reçu une recherche pour %d.\n", this.rang, this.chordid, valeur_recue);
-				rechercher(valeur_recue, NULL);
+				rechercher(valeur_recue, status.MPI_SOURCE);
 				break;
-			// on a rajouté un tag pour faire la différence entre le cas d'une recherche initiée suite à la demande 
-			// du simulateur ou transférée par un pair.
 			case TAG_TRANSFERT:
-				MPI_Recv(&initiateur, 1, MPI_PAIR, MPI_ANY_SOURCE, MPI_ANY_TAG, MPI_COMM_WORLD, &status);
-				rechercher(valeur_recue, &initiateur);
+				MPI_Recv(&initiateur_rang, 1, MPI_INT, MPI_ANY_SOURCE, MPI_ANY_TAG, MPI_COMM_WORLD, &status);
+				rechercher(valeur_recue, initiateur_rang);
 				break;
 			// on est responsable de la clé recherchée
 			case TAG_RESPONSABLE:
-				MPI_Recv(&initiateur, 1, MPI_PAIR, MPI_ANY_SOURCE, MPI_ANY_TAG, MPI_COMM_WORLD, &status); // paiir ayant initié la recherche
-				MPI_Send(&this, 1, MPI_PAIR, INITIATEUR, TAG_RESULTAT, MPI_COMM_WORLD);
-				printf("{%d,%d} a envoyé sa réponse pour %d au processus simulateur suite à la requete sur {%d,%d}.\n", this.rang, this.chordid, valeur_recue, initiateur.rang, initiateur.chordid);
+				MPI_Recv(&initiateur_rang, 1, MPI_INT, MPI_ANY_SOURCE, MPI_ANY_TAG, MPI_COMM_WORLD, &status); // pair ayant initié la recherche
+				MPI_Send(&this, 1, MPI_PAIR, initiateur_rang, TAG_RESULTAT, MPI_COMM_WORLD);
+				printf("{%d,%d} a envoyé sa réponse pour %d au processus ayant fait la requête (P%d).\n", this.rang, this.chordid, valeur_recue, initiateur_rang);
 				break;
 			case TAG_FIN:
 				run = 0;
