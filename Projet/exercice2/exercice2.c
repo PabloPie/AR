@@ -4,7 +4,7 @@
 #include <time.h>
 
 #define M		6	// Nombre de bits
-#define PAIRS	10	// Nombre de pairs
+// Nombre de pairs dynamique !
 
 #include "exercice2.h"
 
@@ -63,7 +63,7 @@ static inline void election(int source)
 				// On envoie ce tableau à notre voisin de droite avec le tag TAG_LISTPAIRS_BUILD.
 				MPI_Send(&pairs_chordid, nb_pairs, MPI_INT, voisin_droite, TAG_LISTPAIRS_BUILD, MPI_COMM_WORLD);
 
-				printf("Le pair P%d a été élu !\n", this.rang);
+				printf("Le pair {%d,%d} a été élu !\n", this.rang, this.chordid);
 			}
 		}
 	} else { // le cas où l'initiateur n'est pas le pair courrant
@@ -247,12 +247,6 @@ int main(int argc, char* argv[])
 	int nb_proc, rang;
 	MPI_Init(&argc, &argv);
 	MPI_Comm_size(MPI_COMM_WORLD, &nb_proc);
-
-	if (nb_proc != PAIRS+1) {
-		printf("Nombre de processus incorrect, il en faut %d !\n", PAIRS+1);
-		MPI_Finalize();
-		return 0;
-	}
 
 	MPI_Comm_rank(MPI_COMM_WORLD, &rang);
 
